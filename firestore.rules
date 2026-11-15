@@ -1,0 +1,191 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidUserProfile(data) {
+      return isValidStr(data.displayName, 1, 80)
+        && isValidStr(data.email, 3, 160)
+        && isValidStr(data.photoURL, 0, 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data, projectId) {
+      return isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && isValidStr(data.projectName, 1, 120)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.version is int
+        && data.version >= 1
+        && data.version <= 1000000
+        && isValidStr(data.storagePath, 1, 300)
+        && data.storagePath == ('users/' + request.auth.uid + '/projects/' + projectId + '.json')
+        && isValidStr(data.contentHash, 1, 128)
+        && data.nodeCount is int
+        && data.nodeCount >= 0
+        && data.nodeCount <= 50000
+        && (!('lastBackupPath' in data) || (
+          isValidStr(data.lastBackupPath, 0, 300) && (
+            data.lastBackupPath == '' || (
+              data.lastBackupPath.split('/').size() == 5
+              && data.lastBackupPath.split('/')[0] == 'users'
+              && data.lastBackupPath.split('/')[1] == request.auth.uid
+              && data.lastBackupPath.split('/')[2] == 'backups'
+              && data.lastBackupPath.split('/')[3] == projectId
+              && data.lastBackupPath.split('/')[4].matches('^[a-zA-Z0-9_\\-]+\\.json$')
+            )
+          )
+        ))
+        && (!('lastBackupAt' in data) || data.lastBackupAt is timestamp);
+    }
+
+    function isValidTemplate(data, templateId) {
+      return isValidId(data.authorId)
+        && data.authorId == request.auth.uid
+        && isValidStr(data.authorName, 1, 80)
+        && isValidStr(data.title, 2, 100)
+        && isValidStr(data.description, 0, 500)
+        && data.category in ['landing', 'portfolio', 'business', 'blog', 'ecommerce', 'component', 'other']
+        && data.version is int
+        && data.version >= 1
+        && data.version <= 100000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && isValidStr(data.storagePath, 1, 300)
+        && data.storagePath == ('templates/' + request.auth.uid + '/' + templateId + '.json')
+        && data.status in ['published', 'hidden']
+        && data.nodeCount is int
+        && data.nodeCount >= 0
+        && data.nodeCount <= 50000;
+    }
+
+    function isValidTemplateReport(data) {
+      return isValidId(data.templateId)
+        && isValidId(data.reporterId)
+        && data.reporterId == request.auth.uid
+        && data.reason in ['malicious-script', 'spam', 'inappropriate', 'copyright', 'other']
+        && isValidStr(data.details, 0, 500)
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && incoming().keys().hasAll(['displayName', 'email', 'photoURL', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['displayName', 'email', 'photoURL', 'createdAt', 'updatedAt'])
+        && isValidUserProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoURL', 'updatedAt']);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    match /projects/{projectId} {
+      allow get: if isValidId(projectId) && isSignedIn() && (resource == null || existing().ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isValidId(projectId)
+        && isSignedIn()
+        && incoming().keys().hasAll(['ownerId', 'projectName', 'createdAt', 'updatedAt', 'version', 'storagePath', 'contentHash', 'nodeCount'])
+        && incoming().keys().hasOnly(['ownerId', 'projectName', 'createdAt', 'updatedAt', 'version', 'storagePath', 'contentHash', 'nodeCount'])
+        && isValidProject(incoming(), projectId)
+        && incoming().version == 1
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(projectId)
+        && isSignedIn()
+        && existing().ownerId == request.auth.uid
+        && isValidProject(incoming(), projectId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            incoming().version == existing().version + 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['projectName', 'updatedAt', 'version', 'storagePath', 'contentHash', 'nodeCount'])
+          )
+          ||
+          (
+            incoming().version == existing().version
+            && incoming().diff(existing()).affectedKeys().hasOnly(['lastBackupPath', 'lastBackupAt', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(projectId) && isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    match /templates/{templateId} {
+      allow get: if isValidId(templateId) && (
+        resource == null ||
+        existing().status == 'published' ||
+        (isSignedIn() && existing().authorId == request.auth.uid)
+      );
+      allow list: if resource.data.status == 'published' || (isSignedIn() && resource.data.authorId == request.auth.uid);
+      allow create: if isValidId(templateId)
+        && isSignedIn()
+        && incoming().keys().hasAll(['authorId', 'authorName', 'title', 'description', 'category', 'version', 'createdAt', 'updatedAt', 'storagePath', 'status', 'nodeCount'])
+        && incoming().keys().hasOnly(['authorId', 'authorName', 'title', 'description', 'category', 'version', 'createdAt', 'updatedAt', 'storagePath', 'status', 'nodeCount'])
+        && isValidTemplate(incoming(), templateId)
+        && incoming().version == 1
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(templateId)
+        && isSignedIn()
+        && existing().authorId == request.auth.uid
+        && isValidTemplate(incoming(), templateId)
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().version >= existing().version
+        && incoming().diff(existing()).affectedKeys().hasOnly(['authorName', 'title', 'description', 'category', 'version', 'storagePath', 'status', 'nodeCount', 'updatedAt']);
+      allow delete: if isValidId(templateId) && isSignedIn() && existing().authorId == request.auth.uid;
+    }
+
+    match /templateReports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (resource == null || existing().reporterId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.reporterId == request.auth.uid;
+      allow create: if isValidId(reportId)
+        && isSignedIn()
+        && incoming().keys().hasAll(['templateId', 'reporterId', 'reason', 'details', 'createdAt'])
+        && incoming().keys().hasOnly(['templateId', 'reporterId', 'reason', 'details', 'createdAt'])
+        && isValidTemplateReport(incoming())
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/templates/$(incoming().templateId));
+      allow update, delete: if false;
+    }
+  }
+}

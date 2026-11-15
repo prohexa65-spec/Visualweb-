@@ -1,0 +1,6 @@
+{
+  "name": "Studio — Visual Website Builder",
+  "description": "Local-first visual website builder with Firebase Auth, Cloud Firestore, Firebase Storage sync, and a community template library.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

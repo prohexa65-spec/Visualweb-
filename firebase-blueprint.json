@@ -1,0 +1,222 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private profile information for a registered Studio editor user.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "User display name shown in the editor."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160,
+          "description": "User email address."
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional avatar URL."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp."
+        }
+      },
+      "required": ["displayName", "email", "photoURL", "createdAt", "updatedAt"]
+    },
+    "CloudProject": {
+      "title": "CloudProject",
+      "description": "Metadata for a user website project whose JSON payload is stored in Firebase Storage.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the project owner."
+        },
+        "projectName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Project display title."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp."
+        },
+        "version": {
+          "type": "number",
+          "description": "Monotonically increasing sync version number."
+        },
+        "storagePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Firebase Storage path to the project JSON document."
+        },
+        "contentHash": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Deterministic hash of project content to avoid redundant uploads."
+        },
+        "nodeCount": {
+          "type": "number",
+          "description": "Number of visual nodes in the project."
+        },
+        "lastBackupPath": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional path to latest cloud backup JSON."
+        },
+        "lastBackupAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of latest cloud backup."
+        }
+      },
+      "required": ["ownerId", "projectName", "createdAt", "updatedAt", "version", "storagePath", "contentHash", "nodeCount"]
+    },
+    "CommunityTemplate": {
+      "title": "CommunityTemplate",
+      "description": "Metadata for a published community website template stored in Firebase Storage.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the template author."
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Public author display name."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Template title."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Template summary description."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["landing", "portfolio", "business", "blog", "ecommerce", "component", "other"],
+          "description": "Template category."
+        },
+        "version": {
+          "type": "number",
+          "description": "Template version number."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp."
+        },
+        "storagePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Firebase Storage path to sanitized template JSON."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["published", "hidden"],
+          "description": "Publishing visibility status."
+        },
+        "nodeCount": {
+          "type": "number",
+          "description": "Number of elements in the template."
+        }
+      },
+      "required": ["authorId", "authorName", "title", "description", "category", "version", "createdAt", "updatedAt", "storagePath", "status", "nodeCount"]
+    },
+    "TemplateReport": {
+      "title": "TemplateReport",
+      "description": "User report flagging an inappropriate or malicious community template.",
+      "type": "object",
+      "properties": {
+        "templateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "ID of the reported template."
+        },
+        "reporterId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the reporting user."
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["malicious-script", "spam", "inappropriate", "copyright", "other"],
+          "description": "Report category."
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional report details."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["templateId", "reporterId", "reason", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profiles accessible only by their owner."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/CloudProject" },
+      "description": "Cloud project metadata owned by individual users."
+    },
+    "/templates/{templateId}": {
+      "schema": { "$ref": "#/entities/CommunityTemplate" },
+      "description": "Community template library entries."
+    },
+    "/templateReports/{reportId}": {
+      "schema": { "$ref": "#/entities/TemplateReport" },
+      "description": "Abuse and malicious content reports against templates."
+    }
+  }
+}
